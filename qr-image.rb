@@ -1,14 +1,7 @@
 #!/usr/bin/env ruby
 require 'opencv'
 include OpenCV
-
-def depth(contour_tree)
-  count = 0;
-  while contour_tree = contour_tree.v_next
-    count += 1;
-  end
-  return count;
-end
+require 'qr-functions.rb'
 
 image = nil
 begin
@@ -29,13 +22,32 @@ markers = [];
 content = contours.v_next;
 
 while content
-  puts depth(content)
-  if depth(content) >= 1
+  if depth(content) > 1
     markers.push content;
   end
   content = content.h_next;
 end
 puts markers
+
+massCenters = [];
+moments = [];
+
+markers.each { |e|
+  moments << CvMoments.new(e, false);
+  massCenters << CvPoint.new(moments[-1].m10 / moments[-1].m00, moments[-1].m01 / moments[-1].m00)
+}
+
+circle_options = { :color => CvColor::Blue, :line_type => :aa, :thickness => -1 }
+massCenters.each{|e|
+  image.circle!(e, 3, circle_options);
+}
+
+A, B, C = 0, 1, 2;
+
+AB = distance(massCenters[A], massCenters[B]);
+AC = distance(massCenters[A], massCenters[C]);
+BC = distance(massCenters[B], massCenters[C]);
+
 
 
 window = GUI::Window.new('Display window') # Create a window for display.
