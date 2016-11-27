@@ -4,97 +4,66 @@ include OpenCV
 require './qr-functions.rb'
 
 image = nil
+imageName = "s2.png"
+dataOutName = "data.txt"
 begin
-  image = CvMat.load("s1.jpeg", CV_LOAD_IMAGE_COLOR) # Read the file.
+  image = CvMat.load(imageName, CV_LOAD_IMAGE_COLOR) # Read the file.
 rescue
   puts 'Could not open or find the image.'
   exit
 end
+QR_STANDARD = 21;
+circle_options = { :color => CvColor::Red, :line_type => :aa, :thickness => -1 }
 
-QR_NORTH = 0;
-QR_EAST = 1;
-QR_SOUTH = 2;
-QR_WEST = 3;
+image = rotateDiag(image);
+# window0 = GUI::Window.new('Diag Rotate window') # Create a window for display.
+# window0.show(image) # Show our image inside it.
+# GUI::wait_key
+image = rotateSide(image);
+# window1 = GUI::Window.new('Side Rotate window') # Create a window for display.
+# window1.show(image) # Show our image inside it.
+# GUI::wait_key
 
 gray  = image.BGR2GRAY
 bin = gray.threshold(0x44, 0xFF, :binary)
-canny = gray.canny(50, 150)
 
-contours = bin.find_contours(:mode => OpenCV::CV_RETR_TREE, :method => OpenCV::CV_CHAIN_APPROX_SIMPLE);
-accuracy = 1
-
-markers = [];
-content = contours.v_next;
-
-while content
-  if depth(content) >= 1
-    markers.push content;
-  end
-  content = content.h_next;
+markers = getMarkers(bin);
+markers.sort!{|a,b|
+  getMassCenter(a).x <=> getMassCenter(b).x
+}
+if getMassCenter(markers[0]).y < getMassCenter(markers[1]).y#<   - because coord inverse
+  markers[0], markers[1] = markers[1], markers[0];
 end
-puts markers
 
-massCenters = [];
-moments = [];
+O, L, M = markers;
 
-markers.each { |e|
-  moments << CvMoments.new(e, false);
-  massCenters << CvPoint.new(moments[-1].m10 / moments[-1].m00, moments[-1].m01 / moments[-1].m00)
+k, b = getLine(O.bounding_rect.bottom_left, O.bounding_rect.bottom_right);#lower bound
+
+#co-ordinates for fourth marker
+x = M.bounding_rect.bottom_right.x;
+y = k * x + b;
+
+forthMarker = CvPoint.new x, y;
+
+
+width = (O.bounding_rect.bottom_left.x - forthMarker.x).abs;
+height = (forthMarker.y - L.bounding_rect.top_right.y).abs;
+
+rect = CvRect.new(L.bounding_rect.top_left.x, L.bounding_rect.top_left.y, width, height);
+
+bin = image.sub_rect(rect);
+bin = bin.resize(CvSize.new(QR_STANDARD,QR_STANDARD))
+
+#Extract data from image to file
+file = File.open(dataOutName, "w")
+bin.height.times{|i|
+  bin.width.times{|j|
+    file.write "#{bin.at(i,j).to_a.inject(0, :+).ceil/(255*3)} "
+  }
+  file.write "\n"
 }
 
-circle_options = { :color => CvColor::Red, :line_type => :aa, :thickness => -1 }
-massCenters.each{|e|
-  image.circle!(e, 3, circle_options);
-}
 
-A, B, C = 0, 1, 2;
-
-AB = distance(massCenters[A], massCenters[B]);
-BC = distance(massCenters[B], massCenters[C]);
-CA = distance(massCenters[C], massCenters[A]);
-
-outlier, median1, median2  = nil;
-
-if  AB > BC && AB > CA
-  outlier = C; median1=A; median2=B;
-elsif ( CA > AB && CA > BC )
-  outlier = B; median1=A; median2=C;
-elsif ( BC > AB && BC > CA )
-  outlier = A;  median1=B; median2=C;
-end
-
-top = outlier; # The obvious choice
-
-dist = lineEquation(massCenters[median1], massCenters[median2], massCenters[outlier]);	# Get the Perpendicular distance of the outlier from the longest side
-slope, align = lineSlope(massCenters[median1], massCenters[median2]); # Also calculate the slope of the longest side
-#
-# # Now that we have the orientation of the line formed median1 & median2 and we also have the position of the outlier w.r.t. the line
-# # Determine the 'right' and 'bottom' markers
-right, bottom, orientation = nil;
-if align == 0
-  bottom = median1;
-  right = median2;
-elsif slope < 0 && dist < 0
-  bottom = median1;
-  right = median2;
-  orientation = QR_NORTH;
-elsif slope > 0 && dist < 0
-  right = median1;
-  bottom = median2;
-  orientation = QR_EAST;
-elsif slope < 0 && dist > 0
-  right = median1;
-  bottom = median2;
-  orientation = QR_SOUTH;
-elsif slope > 0 && dist > 0
-  bottom = median1;
-  right = median2;
-  orientation = QR_WEST;
-end
-
-# To ensure any unintended values do not sneak up when QR code is not present
-
-window = GUI::Window.new('Display window') # Create a window for display.
-# image = image.resize(CvSize.new 21, 21);
-window.show(image) # Show our image inside it.
-GUI::wait_key # Wait for a keystroke in the window.
+window = GUI::Window.new('Display window')
+window.show(bin)
+GUI::wait_key
