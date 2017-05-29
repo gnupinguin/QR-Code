@@ -68,15 +68,6 @@ bin = bin.threshold(127, 255, :binary)
 bin.save('out.jpg');
 #Extract data from image to file
 # file = File.open(dataOutName, "w")
-
-# 21.size.times{|i|
-#   21.size.times{|j|
-#     # file.write "#{getBinarySquareColor(i*21 + j, bin)} "
-#     puts i*21 + j
-#
-#   }
-#   file.write "\n"
-# }
 # (21**2).times{|i|
 #   file.write "#{getBinarySquareColor(i, 21, 21, 10, bin)} "
 #   if i % 21 == 0 && i != 0
@@ -88,7 +79,7 @@ bin.save('out.jpg');
 file = File.open(dataOutName, "w")
 bin.height.times{|i|
   bin.width.times{|j|
-    file.write "#{bin.at(i,j).to_a.inject(0, :+).ceil/(255)}"
+    file.write "#{bin.at(i,j).to_a.inject(0, :+).ceil/(255)} "
   }
   file.write "\n"
 }
